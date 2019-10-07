@@ -41,7 +41,7 @@ class AggregatorHandler(logging.handlers.DatagramHandler):
             _ = self.format(record)
             # to avoid json error
             record.exc_info = None
-        str_ = json.dumps(record.__dict__)
+        str_ = json.dumps(record.__dict__).encode("utf8")
         # for next handler
         if exc_info:
             record.exc_info = exc_info

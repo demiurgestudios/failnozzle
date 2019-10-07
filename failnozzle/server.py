@@ -22,7 +22,10 @@ import smtplib
 import sys
 
 from jinja2 import Environment, FileSystemLoader
-import gevent.coros
+try:
+    from gevent.coros import Semaphore
+except:
+    from gevent.lock import Semaphore
 import gevent.queue
 import gevent.socket
 
@@ -64,7 +67,7 @@ class MessageBuffer(object):
     """
     def __init__(self, subject_template, body_template):
         self.counts_by_unique = defaultdict(MessageCounts)
-        self.lock = gevent.coros.Semaphore()
+        self.lock = Semaphore()
         self.subject_template = subject_template
         self.body_template = body_template
 
@@ -116,14 +119,14 @@ class MessageBuffer(object):
         """
         Get the unique messages held by this buffer.
         """
-        return self.counts_by_unique.keys()
+        return list(self.counts_by_unique.keys())
 
     @property
     def kinds(self):
         """
         Returns a set of the unique kinds of messages in the buffer.
         """
-        return set(unique.kind for unique in self.counts_by_unique.iterkeys())
+        return set(unique.kind for unique in self.counts_by_unique.keys())
 
     @property
     def sorted_counts(self):
@@ -132,7 +135,7 @@ class MessageBuffer(object):
         order of count.
         """
         return sorted(self.counts_by_unique.items(),
-                      key=lambda (_, counts): counts.total,
+                      key=lambda item: item[1].total,
                       reverse=True)
 
     def flush(self):
@@ -162,9 +165,9 @@ class MessageBuffer(object):
                 # Too general an exception but we want to make sure we recover
                 # cleanly.
                 # pylint: disable=W0703
-                except Exception, exc:
+                except Exception as exc:
                     # pylint: disable=E1205
-                    logging.exception('Could not render report', exc)
+                    logging.exception('Could not render report')
 
             self.counts_by_unique.clear()
             return subject, report, unique_messages
@@ -404,8 +407,13 @@ def is_just_monitoring_error(unique_message):
     monitoring (meaning that it contains the one of the
     JUST_MONITORING_ERROR_MARKERS somewhere in the exc_text)
     """
-    return any([(marker in unicode(unique_message.exc_text) or
-                 marker in unicode(unique_message.message))
+    if sys.version_info == 2:
+        exc_text = unicode(unique_message.exc_text)
+        message = unicode(unique_message.message)
+    else:
+        exc_text = str(unique_message.exc_text)
+        message = str(unique_message.message)
+    return any([(marker in exc_text or marker in message)
                 for marker
                 in setting('MONITORING_ERROR_MARKERS')])
 
@@ -524,7 +532,7 @@ def send_email(from_addr, to_addr, subject, body, reply_to=None):
     # Too general an exception but we want to make sure we recover/log
     # cleanly.
     # pylint: disable=W0703
-    except Exception, exc:
+    except Exception as exc:
         logging.exception('Error sending email "%s": %s', subject, exc)
 
 
@@ -621,7 +629,7 @@ def main():
         # Too general an exception but we want to make sure we recover
         # cleanly.
         # pylint: disable=W0703
-        except Exception, exc:
+        except Exception as exc:
             count += 1
             logging.exception('Error on incoming packet: %s', exc)
             message_queue.put(_make_fake_record(count, exc))

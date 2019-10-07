@@ -1,6 +1,8 @@
 """
 Settings for failnozzle.
 """
+from __future__ import print_function
+
 import imp
 import logging
 import os
@@ -140,7 +142,7 @@ def import_config_file(config_file):
                 globals()[name] = getattr(module, name)
                 overwrite_count += 1
 
-        print "Overwrote %s settings" % overwrite_count
+        print("Overwrote %s settings" % overwrite_count)
     else:
-        print "Config file %s not found" % config_file
+        print("Config file %s not found" % config_file)
         exit(1)
